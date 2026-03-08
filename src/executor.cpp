@@ -13,17 +13,15 @@ void execute_command(vector<string> &args)
 {
     bool background = false;
 
-    // Detect background process
     if (!args.empty() && args.back() == "&")
     {
         background = true;
         args.pop_back();
     }
 
-    // Detect output redirection
     int redirect_index = -1;
 
-    for (int i = 0; i < args.size(); i++)
+    for (size_t i = 0; i < args.size(); i++)
     {
         if (args[i] == ">")
         {
@@ -36,11 +34,16 @@ void execute_command(vector<string> &args)
 
     if (redirect_index != -1)
     {
+        if (redirect_index + 1 >= args.size())
+        {
+            cerr << "syntax error: expected file after '>'\n";
+            return;
+        }
+
         outfile = args[redirect_index + 1];
         args.resize(redirect_index);
     }
 
-    // Split commands by pipes
     vector<vector<string>> commands;
     vector<string> current;
 
@@ -48,6 +51,12 @@ void execute_command(vector<string> &args)
     {
         if (arg == "|")
         {
+            if (current.empty())
+            {
+                cerr << "syntax error near '|'\n";
+                return;
+            }
+
             commands.push_back(current);
             current.clear();
         }
@@ -57,23 +66,37 @@ void execute_command(vector<string> &args)
         }
     }
 
-    commands.push_back(current);
+    if (!current.empty())
+        commands.push_back(current);
 
     int n = commands.size();
+
     int prev_pipe[2];
+    vector<pid_t> children;
 
     for (int i = 0; i < n; i++)
     {
         int pipefd[2];
 
         if (i < n - 1)
-            pipe(pipefd);
+        {
+            if (pipe(pipefd) == -1)
+            {
+                perror("pipe failed");
+                return;
+            }
+        }
 
         pid_t pid = fork();
 
+        if (pid < 0)
+        {
+            perror("fork failed");
+            return;
+        }
+
         if (pid == 0)
         {
-            // Handle input from previous pipe
             if (i > 0)
             {
                 dup2(prev_pipe[0], STDIN_FILENO);
@@ -81,7 +104,6 @@ void execute_command(vector<string> &args)
                 close(prev_pipe[1]);
             }
 
-            // Handle output to next pipe
             if (i < n - 1)
             {
                 dup2(pipefd[1], STDOUT_FILENO);
@@ -89,12 +111,17 @@ void execute_command(vector<string> &args)
                 close(pipefd[1]);
             }
 
-            // Handle output redirection on last command
             if (redirect_index != -1 && i == n - 1)
             {
                 int fd = open(outfile.c_str(),
                               O_WRONLY | O_CREAT | O_TRUNC,
                               0644);
+
+                if (fd < 0)
+                {
+                    perror("open failed");
+                    exit(1);
+                }
 
                 dup2(fd, STDOUT_FILENO);
                 close(fd);
@@ -112,23 +139,18 @@ void execute_command(vector<string> &args)
             perror("exec failed");
             exit(1);
         }
-        else
-        {
-            // Print background process PID once
-            if (background && i == 0)
-            {
-                cout << "[bg] pid: " << pid << endl;
-            }
-        }
 
-        // Close previous pipe
+        children.push_back(pid);
+
+        if (background && i == 0)
+            cout << "[bg] pid: " << pid << endl;
+
         if (i > 0)
         {
             close(prev_pipe[0]);
             close(prev_pipe[1]);
         }
 
-        // Save current pipe
         if (i < n - 1)
         {
             prev_pipe[0] = pipefd[0];
@@ -136,10 +158,10 @@ void execute_command(vector<string> &args)
         }
     }
 
-    // Wait only if not background
     if (!background)
     {
-        for (int i = 0; i < n; i++)
-            wait(NULL);
+        for (pid_t pid : children)
+            waitpid(pid, NULL, 0);
     }
+    
 }

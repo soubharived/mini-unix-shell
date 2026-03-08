@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <sys/wait.h>
 
 #include "../include/parser.h"
 #include "../include/executor.h"
@@ -15,17 +16,22 @@ void start_shell()
 
     while (true)
     {
-        cout << "cwushell> ";
-        getline(cin, input);
+        int status;
+        while (waitpid(-1, &status, WNOHANG) > 0);
 
-        if (input.size() == 0)
+        cout << "cwushell> " << flush;
+
+        if (!getline(cin, input))
+            break;
+
+        if (input.find_first_not_of(" \t") == string::npos)
             continue;
 
         add_history(input);
 
         vector<string> args = parse_command(input);
 
-        if (args.size() == 0)
+        if (args.empty())
             continue;
 
         if (run_builtin(args))

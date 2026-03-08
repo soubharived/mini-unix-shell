@@ -5,6 +5,7 @@
 #include <string>
 #include <iostream>
 
+#include "../include/jobs.h"
 #include "../include/executor.h"
 
 using namespace std;
@@ -97,6 +98,7 @@ void execute_command(vector<string> &args)
 
         if (pid == 0)
         {
+            signal(SIGINT, SIG_DFL);
             if (i > 0)
             {
                 dup2(prev_pipe[0], STDIN_FILENO);
@@ -127,7 +129,7 @@ void execute_command(vector<string> &args)
                 close(fd);
             }
 
-            vector<char*> cargs;
+            vector<char *> cargs;
 
             for (auto &arg : commands[i])
                 cargs.push_back(&arg[0]);
@@ -143,7 +145,15 @@ void execute_command(vector<string> &args)
         children.push_back(pid);
 
         if (background && i == 0)
+        {
             cout << "[bg] pid: " << pid << endl;
+
+            string cmd = "";
+            for (auto &s : commands[i])
+                cmd += s + " ";
+
+            add_job(pid, cmd);
+        }
 
         if (i > 0)
         {
@@ -163,5 +173,4 @@ void execute_command(vector<string> &args)
         for (pid_t pid : children)
             waitpid(pid, NULL, 0);
     }
-    
 }

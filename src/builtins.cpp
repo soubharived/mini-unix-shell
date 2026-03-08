@@ -15,7 +15,7 @@ void add_history(const string &cmd)
 
 void show_history()
 {
-    for (int i = 0; i < history_list.size(); i++)
+    for (size_t i = 0; i < history_list.size(); i++)
     {
         cout << i + 1 << "  " << history_list[i] << endl;
     }
@@ -23,6 +23,36 @@ void show_history()
 
 bool run_builtin(vector<string> &args)
 {
+    if (args[0] == "jobs")
+    {
+        list_jobs();
+        return true;
+    }
+
+    if (args[0] == "fg")
+    {
+        if (args.size() < 2)
+        {
+            cout << "fg: job id required\n";
+            return true;
+        }
+
+        int id;
+
+        try
+        {
+            id = stoi(args[1]);
+        }
+        catch (...)
+        {
+            cout << "fg: invalid job id\n";
+            return true;
+        }
+
+        bring_fg(id);
+        return true;
+    }
+
     if (args[0] == "cd")
     {
         if (args.size() < 2)
@@ -34,6 +64,7 @@ bool run_builtin(vector<string> &args)
             if (chdir(args[1].c_str()) != 0)
                 perror("cd failed");
         }
+
         return true;
     }
 

@@ -2,3 +2,6 @@ cwushell
 *.exe
 *.o
 *.out
+*.txt
+hello
+build/
